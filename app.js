@@ -1,10 +1,10 @@
 const generateBufferPallets = () => {
     const columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
-    const rows = [1, 2, 3, 4, 5, 6];
+    const rows = [1, 2, 3, 4, 5];
     const pallets = [];
     
     for (let c = 0; c < 12; c++) {
-        for (let r = 0; r < 6; r++) {
+        for (let r = 0; r < rows.length; r++) {
             pallets.push({ address: `${columns[c]}${rows[r]}`, waves: [] });
         }
     }
@@ -106,8 +106,8 @@ function getViewContent() {
 }
 
 function renderOverview() {
-    const bufferCapacity = 72; 
-    const occupiedPallets = state.appData.bufferPallets.filter(p => p.waves.length > 0);
+    const bufferCapacity = initialBufferPallets.length; 
+    const occupiedPallets = state.appData.bufferPallets.filter(p => /^[A-L][1-5]$/.test(p.address) && p.waves.length > 0);
     const bufferOccupied = occupiedPallets.length;
     const bufferFree = bufferCapacity - bufferOccupied;
     
@@ -125,7 +125,7 @@ function renderOverview() {
                         <div class="p-3 bg-indigo-50 text-indigo-600 rounded-xl group-hover:scale-110 transition-transform"><i class="ph ph-map-trifold text-2xl"></i></div>
                         <div>
                             <p class="text-sm text-slate-500 font-medium">Vagas no Buffer</p>
-                            <p class="text-2xl font-black text-slate-800 leading-tight">${bufferOccupied} <span class="text-sm text-slate-400 font-medium">/ 72</span></p>
+                            <p class="text-2xl font-black text-slate-800 leading-tight">${bufferOccupied} <span class="text-sm text-slate-400 font-medium">/ ${bufferCapacity}</span></p>
                         </div>
                     </div>
                     <div class="mt-4">
@@ -169,7 +169,7 @@ function renderOverview() {
 
 function renderBufferMap() {
     const columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
-    const rows = [1, 2, 3, 4, 5, 6];
+    const rows = [1, 2, 3, 4, 5];
     
     const getPallet = (addr) => state.appData.bufferPallets.find(p => p.address === addr);
     const selectedPallet = state.ui.selectedAddress ? getPallet(state.ui.selectedAddress) : null;
@@ -180,7 +180,7 @@ function renderBufferMap() {
             <div class="buffer-toolbar">
                 <div>
                     <h2 class="text-2xl font-bold text-slate-800 tracking-tight">Mapa do Buffer</h2>
-                    <p class="text-slate-500 text-sm mt-1 font-medium">Visão esquemática das 72 vagas (A-L / 1-6).</p>
+                    <p class="text-slate-500 text-sm mt-1 font-medium">Visão esquemática das 60 vagas (A–L / 1–5).</p>
                 </div>
                 <div class="buffer-actions flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
                     <button id="pallet-lookup-button" type="button" onclick="openPalletLookupModal()" class="w-full sm:w-auto flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition shadow-sm">
@@ -391,7 +391,7 @@ function renderModals() {
                     <p class="text-sm text-slate-600">Digite ou bipe a etiqueta da vaga para visualizar o palete.</p>
                     <div>
                         <label for="pallet-lookup-input" class="block text-sm font-semibold text-slate-700 mb-2">Etiqueta / endereço da vaga</label>
-                        <input id="pallet-lookup-input" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" autofocus placeholder="Ex.: A1 ou L6" aria-describedby="pallet-lookup-error" class="w-full p-3 border border-slate-300 rounded-lg text-lg uppercase focus:ring-2 focus:ring-blue-500" required>
+                        <input id="pallet-lookup-input" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" autofocus placeholder="Ex.: A1 ou L5" aria-describedby="pallet-lookup-error" class="w-full p-3 border border-slate-300 rounded-lg text-lg uppercase focus:ring-2 focus:ring-blue-500" required>
                     </div>
                     <p id="pallet-lookup-error" role="alert" class="text-sm text-red-600"></p>
                     <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg font-semibold">Ver palete</button>
@@ -427,7 +427,7 @@ function renderModals() {
                                 </div>
                                 <div>
                                     <label class="block text-sm font-semibold text-slate-700 mb-1">Endereço (Vaga no Buffer)</label>
-                                    <input type="text" id="form-wave-slot" placeholder="BiPe ou digite a vaga (ex: A1, L6)" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase font-bold" required>
+                                    <input type="text" id="form-wave-slot" placeholder="BiPe ou digite a vaga (ex: A1, L5)" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase font-bold" required>
                                 </div>
                                 <div class="grid grid-cols-2 gap-4">
                                     <div>
@@ -608,8 +608,8 @@ function handlePalletLookup(event) {
     const input = document.getElementById('pallet-lookup-input');
     const address = input.value.trim().toUpperCase();
     const error = document.getElementById('pallet-lookup-error');
-    if (!/^[A-L][1-6]$/.test(address) || !state.appData.bufferPallets.some(p => p.address === address)) {
-        error.textContent = 'Vaga não encontrada. Informe um endereço de A1 a L6.';
+    if (!/^[A-L][1-5]$/.test(address) || !state.appData.bufferPallets.some(p => p.address === address)) {
+        error.textContent = 'Vaga não encontrada. Informe um endereço de A1 a L5.';
         input.setAttribute('aria-invalid', 'true');
         input.focus();
         input.select();
@@ -704,8 +704,8 @@ function handleAddWaveSubmit(e) {
         renderModals();
         return;
     }
-    if (!/^[A-L][1-6]$/.test(slot)) {
-        state.ui.modals.addWave.error = 'Vaga inválida. Use Letra (A-L) + Número (1-6). Ex: A1, L6.';
+    if (!/^[A-L][1-5]$/.test(slot)) {
+        state.ui.modals.addWave.error = 'Vaga inválida. Use A–L com linhas 1–5. Ex: A1, L5.';
         renderModals();
         return;
     }
@@ -813,8 +813,8 @@ function handleReallocateSubmit(e) {
     const oldSlot = state.ui.modals.reallocate.currentSlot;
     const newSlot = document.getElementById('form-reallocate-slot').value.trim().toUpperCase();
 
-    if (!/^[A-L][1-6]$/.test(newSlot)) {
-        state.ui.modals.reallocate.error = 'Vaga inválida. Use Letra (A-L) + Número (1-6).';
+    if (!/^[A-L][1-5]$/.test(newSlot)) {
+        state.ui.modals.reallocate.error = 'Vaga inválida. Use A–L com linhas 1–5.';
         renderModals();
         return;
     }
