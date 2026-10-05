@@ -269,7 +269,7 @@ function renderBufferMap() {
                                 <i class="ph ph-x"></i>
                             </button>
                         </div>
-                        <div class="p-5 flex-1 overflow-y-auto">
+                        <div class="pallet-dialog-body p-5 flex-1 overflow-y-auto">
                             ${isSelectedOccupied ? `
                                 <div class="space-y-4">
                                     <div class="flex items-center justify-between bg-blue-50 p-3 rounded-lg border border-blue-100">
@@ -311,7 +311,7 @@ function renderBufferMap() {
                                             <div class="wave-detail-card relative border ${cardClass} rounded-lg p-3 overflow-hidden transition-colors" data-wave="${w.id}">
                                                 <div class="wave-indicator absolute top-0 left-0 w-1 h-full ${indicatorColor}"></div>
                                                 <div class="pl-2">
-                                                    <div class="flex justify-between items-start mb-2">
+                                                    <div class="pallet-wave-heading flex justify-between items-start mb-2">
                                                         <h4 class="wave-id-text font-bold ${w.priority === 'Urgente' ? 'text-red-900' : 'text-slate-800'}">${w.id}</h4>
                                                         ${w.priority === 'Urgente' ? `<span class="flex items-center text-[10px] font-bold px-2 py-0.5 rounded bg-red-600 text-white shadow-sm"><i class="ph ph-warning-circle mr-1 text-xs"></i> PRIORIDADE</span>` : ''}
                                                     </div>
@@ -325,7 +325,7 @@ function renderBufferMap() {
                                                         </div>
                                                     </div>
                                                     ${continuationHtml}
-                                                    <div class="mt-3 pt-2 border-t border-slate-100 flex justify-end flex-wrap gap-2">
+                                                    <div class="pallet-wave-actions mt-3 pt-2 border-t border-slate-100 flex justify-end flex-wrap gap-2">
                                                         <button onclick="openEditWaveModal('${w.id}', '${selectedPallet.address}')" class="text-[11px] px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded flex items-center font-medium transition"><i class="ph ph-pencil-simple mr-1"></i> Editar</button>
                                                         <button onclick="openReallocateModal('${w.id}', '${selectedPallet.address}')" class="text-[11px] px-2 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded flex items-center font-medium transition"><i class="ph ph-arrows-left-right mr-1"></i> Realocar</button>
                                                         <button onclick="openWithdrawWaveModal('${w.id}', '${selectedPallet.address}')" class="text-[11px] px-2 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded flex items-center font-medium transition"><i class="ph ph-sign-out mr-1"></i> Retirar onda</button>
