@@ -192,3 +192,46 @@ html[data-theme="dark"] .page-heading h1, html[data-theme="dark"] #clock-display
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* Detalhes do palete ocupam a tela no celular, incluindo Safari no iPhone. */
+@media (max-width: 599px) {
+    #pallet-dialog {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        max-width: none;
+        height: 100vh;
+        height: 100dvh;
+        max-height: 100vh;
+        max-height: 100dvh;
+        margin: 0;
+        border: 0;
+        border-radius: 0;
+        font-size: 16px;
+    }
+    #pallet-dialog > :first-child {
+        padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left));
+        border-radius: 0;
+        gap: 12px;
+    }
+    #pallet-dialog-title { font-size: 22px; line-height: 1.3; }
+    #pallet-dialog .pallet-dialog-body {
+        flex: 1 1 0;
+        min-height: 0;
+        width: 100%;
+        padding: 16px max(12px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
+    #pallet-dialog .wave-detail-card { padding: 16px 12px; border-radius: 12px; }
+    #pallet-dialog .wave-detail-card > .pl-2 { min-width: 0; padding-left: 8px; }
+    #pallet-dialog .pallet-wave-heading { flex-wrap: wrap; gap: 8px; }
+    #pallet-dialog .wave-id-text { font-size: 22px; line-height: 1.3; min-width: 0; max-width: 100%; }
+    #pallet-dialog .wave-detail-card :is(.text-xs, .text-\[10px\]) { font-size: 14px; line-height: 1.5; }
+    #pallet-dialog .wave-detail-card .ph-clock { flex-shrink: 0; }
+    #pallet-dialog .pallet-wave-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding-top: 12px; }
+    #pallet-dialog .pallet-wave-actions button { min-height: 48px; padding: 10px 8px; font-size: 14px; }
+    #pallet-dialog .pallet-wave-actions button:last-child { grid-column: 1 / -1; }
+    #pallet-dialog .pallet-dialog-body > .space-y-4 > :first-child { flex-wrap: wrap; gap: 8px; }
+}
