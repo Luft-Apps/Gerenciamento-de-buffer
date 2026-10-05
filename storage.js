@@ -3,10 +3,12 @@ const BufferStorage = (() => {
     const key = 'luft-buffer-v1';
 
     function validate(pallets) {
-        if (!Array.isArray(pallets) || pallets.length !== 72) throw new Error('Dados do buffer inválidos.');
+        if (!Array.isArray(pallets) || ![60, 65, 72].includes(pallets.length)) throw new Error('Dados do buffer inválidos: esperadas 60 vagas ou 65/72 nos layouts anteriores.');
+        const legacyLayout = pallets.length !== 60;
+        const addressPattern = pallets.length === 72 ? /^[A-L][1-6]$/ : (legacyLayout ? /^([A-G][1-5]|[H-L][1-6])$/ : /^[A-L][1-5]$/);
         const addresses = new Set();
         for (const pallet of pallets) {
-            if (!/^[A-L][1-6]$/.test(pallet.address) || addresses.has(pallet.address)
+            if (!pallet || !addressPattern.test(pallet.address) || addresses.has(pallet.address)
                 || !Array.isArray(pallet.waves) || pallet.waves.length > 4) throw new Error('Vaga inválida nos dados salvos.');
             addresses.add(pallet.address);
             const ids = new Set();
