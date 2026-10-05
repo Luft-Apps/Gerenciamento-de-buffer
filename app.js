@@ -51,7 +51,7 @@ let state = {
             withdraw: { open: false, step: 'form', error: '' },
             editWave: { open: false, oldWaveId: '', currentSlot: '', error: '' },
             reallocate: { open: false, waveId: '', currentSlot: '', error: '' },
-            deleteWave: { open: false, waveId: '', currentSlot: '' }
+            withdrawWave: { open: false, waveId: '', currentSlot: '' }
         }
     }
 };
@@ -182,7 +182,7 @@ function renderBufferMap() {
                     <h2 class="text-2xl font-bold text-slate-800 tracking-tight">Mapa do Buffer</h2>
                     <p class="text-slate-500 text-sm mt-1 font-medium">Visão esquemática das 72 vagas (A-L / 1-6).</p>
                 </div>
-                <div class="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
+                <div class="buffer-actions flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
                     <button id="pallet-lookup-button" type="button" onclick="openPalletLookupModal()" class="w-full sm:w-auto flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition shadow-sm">
                         <i class="ph ph-barcode text-lg" aria-hidden="true"></i>
                         <span>Detalhe palete</span>
@@ -191,7 +191,7 @@ function renderBufferMap() {
                         <i class="ph ph-plus font-bold text-lg"></i>
                         <span>Adicionar Onda</span>
                     </button>
-                    <div class="relative w-full sm:w-72">
+                    <div class="buffer-search relative w-full sm:w-72">
                         <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 text-lg"></i>
                         <input type="text" placeholder="Buscar por onda..." 
                                oninput="handleSearch(this.value)" value="${escapeAttribute(state.ui.searchBufferText)}"
@@ -328,7 +328,7 @@ function renderBufferMap() {
                                                     <div class="mt-3 pt-2 border-t border-slate-100 flex justify-end flex-wrap gap-2">
                                                         <button onclick="openEditWaveModal('${w.id}', '${selectedPallet.address}')" class="text-[11px] px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded flex items-center font-medium transition"><i class="ph ph-pencil-simple mr-1"></i> Editar</button>
                                                         <button onclick="openReallocateModal('${w.id}', '${selectedPallet.address}')" class="text-[11px] px-2 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded flex items-center font-medium transition"><i class="ph ph-arrows-left-right mr-1"></i> Realocar</button>
-                                                        <button onclick="openDeleteWaveModal('${w.id}', '${selectedPallet.address}')" class="text-[11px] px-2 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded flex items-center font-medium transition"><i class="ph ph-trash mr-1"></i> Excluir</button>
+                                                        <button onclick="openWithdrawWaveModal('${w.id}', '${selectedPallet.address}')" class="text-[11px] px-2 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded flex items-center font-medium transition"><i class="ph ph-sign-out mr-1"></i> Retirar onda</button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -570,21 +570,21 @@ function renderModals() {
         `;
     }
 
-    // Delete Wave Modal
-    if (state.ui.modals.deleteWave.open) {
+    // Retirada individual de onda
+    if (state.ui.modals.withdrawWave.open) {
         html += `
             <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 fade-in">
                 <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col">
                     <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-red-50">
-                        <h3 class="font-bold text-slate-800 flex items-center"><i class="ph ph-warning-circle mr-2 text-red-600"></i> Excluir Onda</h3>
-                        <button onclick="closeModal('deleteWave')" class="text-slate-400 hover:text-slate-600"><i class="ph ph-x text-lg"></i></button>
+                        <h3 class="font-bold text-slate-800 flex items-center"><i class="ph ph-warning-circle mr-2 text-red-600"></i> Retirar Onda</h3>
+                        <button onclick="closeModal('withdrawWave')" class="text-slate-400 hover:text-slate-600"><i class="ph ph-x text-lg"></i></button>
                     </div>
                     <div class="p-6">
-                        <p class="text-sm text-slate-600 mb-4">Tem certeza que deseja remover a onda <strong class="text-slate-800">${state.ui.modals.deleteWave.waveId}</strong> da vaga <strong class="text-slate-800">${state.ui.modals.deleteWave.currentSlot}</strong>?</p>
-                        <p class="text-xs text-red-600 mb-6 bg-red-50 p-3 rounded-lg border border-red-100">Esta ação removerá a onda deste palete.</p>
+                        <p class="text-sm text-slate-600 mb-4">Deseja retirar para a bancada a onda <strong class="text-slate-800">${state.ui.modals.withdrawWave.waveId}</strong> da vaga <strong class="text-slate-800">${state.ui.modals.withdrawWave.currentSlot}</strong>?</p>
+                        <p class="text-xs text-red-600 mb-6 bg-red-50 p-3 rounded-lg border border-red-100">A onda será retirada para a bancada e ficará registrada no banco por 2 horas.</p>
                         <div class="flex justify-end space-x-3">
-                            <button type="button" onclick="closeModal('deleteWave')" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
-                            <button onclick="handleDeleteWaveSubmit()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg shadow-sm">Confirmar Exclusão</button>
+                            <button type="button" onclick="closeModal('withdrawWave')" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
+                            <button onclick="handleWithdrawWaveSubmit()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg shadow-sm">Confirmar Retirada</button>
                         </div>
                     </div>
                 </div>
@@ -770,8 +770,8 @@ function openReallocateModal(waveId, currentSlot) {
     renderModals();
 }
 
-function openDeleteWaveModal(waveId, currentSlot) {
-    state.ui.modals.deleteWave = { open: true, waveId: waveId, currentSlot: currentSlot };
+function openWithdrawWaveModal(waveId, currentSlot) {
+    state.ui.modals.withdrawWave = { open: true, waveId: waveId, currentSlot: currentSlot };
     renderModals();
 }
 
@@ -860,9 +860,9 @@ function handleReallocateSubmit(e) {
     renderApp();
 }
 
-function handleDeleteWaveSubmit() {
-    const waveId = state.ui.modals.deleteWave.waveId;
-    const slot = state.ui.modals.deleteWave.currentSlot;
+function handleWithdrawWaveSubmit() {
+    const waveId = state.ui.modals.withdrawWave.waveId;
+    const slot = state.ui.modals.withdrawWave.currentSlot;
 
     const palletIdx = state.appData.bufferPallets.findIndex(p => p.address === slot);
     if (palletIdx > -1) {
@@ -873,7 +873,7 @@ function handleDeleteWaveSubmit() {
         }
     }
 
-    closeModal('deleteWave');
+    closeModal('withdrawWave');
     renderApp();
 }
 
@@ -1012,7 +1012,9 @@ function persistOperation(original, isWithdrawal = false) {
         }
         const before = JSON.stringify(state.appData.bufferPallets);
         const uiBefore = JSON.stringify(state.ui);
-        const withdrawalAddress = isWithdrawal ? state.ui.selectedAddress : null;
+        const withdrawalAddress = isWithdrawal === 'wave'
+            ? state.ui.modals.withdrawWave.currentSlot
+            : (isWithdrawal ? state.ui.selectedAddress : null);
         original.apply(this, args);
         if (before === JSON.stringify(state.appData.bufferPallets)) return;
         storageBusy = true;
@@ -1048,7 +1050,7 @@ handleAddWaveSubmit = persistOperation(handleAddWaveSubmit);
 handleWithdrawSubmit = persistOperation(handleWithdrawSubmit, true);
 handleEditWaveSubmit = persistOperation(handleEditWaveSubmit);
 handleReallocateSubmit = persistOperation(handleReallocateSubmit);
-handleDeleteWaveSubmit = persistOperation(handleDeleteWaveSubmit);
+handleWithdrawWaveSubmit = persistOperation(handleWithdrawWaveSubmit, 'wave');
 
 async function initializeApp() {
     renderLogin();
