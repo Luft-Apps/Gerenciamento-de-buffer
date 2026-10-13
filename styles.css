@@ -123,9 +123,26 @@ body { margin:0; }
 .buffer-cell:focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
 .buffer-layout:has(.buffer-details) { grid-template-columns:minmax(0,1fr); }
 .buffer-map-inner { min-width:820px; }
-.buffer-map-grid { display:grid; grid-template-columns:24px repeat(7,minmax(0,1fr)) 40px repeat(5,minmax(0,1fr)); gap:8px; }
+.buffer-map-grid { display:grid; grid-template-columns:24px repeat(7,minmax(0,1fr)) 2px repeat(5,minmax(0,1fr)); gap:8px; }
+.buffer-aisle { border-color: #d97706; }
+.buffer-aisle-vertical { width: 0; border-left: 2px dotted; border-color: #d97706; align-self: stretch; }
+.buffer-aisle-horizontal { grid-column: 1 / -1; height: 0; border-top: 2px dotted; border-color: #d97706; }
+html[data-theme="dark"] .buffer-aisle { border-color: #fbbf24; }
 .buffer-toolbar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; }
+.history-filters { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; }
+.history-filters label { flex: 1 1 200px; }
+.history-entry-heading { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; overflow-wrap: anywhere; }
+.history-changes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; overflow-wrap: anywhere; }
+.history-page button:disabled { opacity: .5; cursor: not-allowed; }
+@media (max-width: 599px) { .history-changes { grid-template-columns: minmax(0, 1fr); } .history-page button { min-height: 44px; } }
 .buffer-cell { height:108px; min-width:0; }
+@media (hover: hover) and (pointer: fine) {
+    .buffer-cell:hover {
+        transform: scale(1.035);
+        z-index: 20;
+        box-shadow: 0 4px 12px rgb(15 23 42 / .12);
+    }
+}
 .wave-id-text { overflow-wrap:anywhere; padding-right:8px; }
 #modals > div { overflow-y:auto; }
 #modals form input[type="text"] { min-height:44px; }
@@ -208,6 +225,7 @@ html[data-theme="dark"] .login-card input { background: #0f172a; color: #fff; bo
 
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    .buffer-cell:hover { transform: none; }
 }
 
 /* Detalhes do palete ocupam a tela no celular, incluindo Safari no iPhone. */
