@@ -17,6 +17,7 @@ const BufferStorage = (() => {
                     || !['Normal', 'Urgente'].includes(wave.priority)
                     || typeof wave.origin?.picking !== 'boolean' || typeof wave.origin?.pulmao !== 'boolean'
                     || (!wave.origin.picking && !wave.origin.pulmao)
+                    || (wave.quantity != null && (!Number.isInteger(wave.quantity) || wave.quantity < 0 || wave.quantity > 2147483647))
                     || typeof wave.time !== 'string' || !/^[0-9/,:\s]{1,40}$/.test(wave.time)) {
                     throw new Error('Onda inválida nos dados salvos.');
                 }
@@ -27,7 +28,8 @@ const BufferStorage = (() => {
             address: p.address,
             waves: p.waves.map(w => ({
                 id: w.id, priority: w.priority,
-                origin: { picking: w.origin.picking, pulmao: w.origin.pulmao }, time: w.time
+                origin: { picking: w.origin.picking, pulmao: w.origin.pulmao }, time: w.time,
+                quantity: w.quantity ?? null
             }))
         }));
     }
