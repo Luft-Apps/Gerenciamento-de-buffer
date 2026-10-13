@@ -37,7 +37,7 @@ function themeButtonContent() {
     return `<i class="ph ${currentTheme === 'dark' ? 'ph-sun' : 'ph-moon'} text-lg"></i><span>${currentTheme === 'dark' ? 'Modo claro' : 'Modo escuro'}</span>`;
 }
 let state = {
-    activeTab: 'overview',
+    activeTab: 'buffer',
     currentTime: new Date(),
     appData: {
         bufferPallets: initialBufferPallets
@@ -51,6 +51,7 @@ let state = {
             withdraw: { open: false, step: 'form', error: '' },
             editWave: { open: false, oldWaveId: '', currentSlot: '', error: '' },
             reallocate: { open: false, waveId: '', currentSlot: '', error: '' },
+            groupWave: { open: false, waveId: '', currentSlot: '', error: '' },
             withdrawWave: { open: false, waveId: '', currentSlot: '' }
         }
     }
@@ -59,6 +60,7 @@ let state = {
 const menuItems = [
     { id: 'overview', label: 'Visão Geral', icon: 'ph ph-squares-four' },
     { id: 'buffer', label: 'Mapa do Buffer', icon: 'ph ph-map-trifold' },
+    { id: 'history', label: 'Histórico', icon: 'ph ph-clock-counter-clockwise' },
 ];
 
 function escapeAttribute(value) {
@@ -95,13 +97,129 @@ function renderApp() {
 function changeTab(tabId) {
     state.activeTab = tabId;
     renderApp();
+    if (tabId === 'history') loadHistory();
 }
 
 function getViewContent() {
     switch(state.activeTab) {
         case 'overview': return renderOverview();
         case 'buffer': return renderBufferMap();
+        case 'history': return renderHistory();
         default: return renderOverview();
+    }
+}
+
+const historyLabels = { entrada: 'Entrada', realocacao: 'Realocação', edicao: 'Edição', retirada: 'Retirada', agrupamento: 'Agrupamento' };
+let historyState = { rows: [], action: '', wave: '', page: 0, loading: false, error: '', hasMore: false };
+let historyRequest = 0;
+const historyPageSize = 30;
+
+function historyWaveDetails(entries) {
+    return entries.map(entry => {
+        const wave = entry.wave;
+        const origins = [wave.origin?.picking ? 'Picking' : '', wave.origin?.pulmao ? 'Pulmão' : ''].filter(Boolean).join(' + ');
+        return `<li><strong>${escapeAttribute(wave.id)}</strong> · ${escapeAttribute(entry.address)} · ${escapeAttribute(wave.priority)} · ${escapeAttribute(origins)} · ${wave.quantity == null ? 'Peças não informadas' : `${Number(wave.quantity).toLocaleString('pt-BR')} peças`}</li>`;
+    }).join('');
+}
+
+function renderHistory() {
+    const h = historyState;
+    return `<section class="history-page space-y-4">
+        <div class="buffer-toolbar">
+            <div><h2 class="text-2xl font-bold text-slate-800">Histórico de ondas</h2><p class="text-sm text-slate-500 mt-1">Movimentações registradas após a ativação do histórico, da mais recente para a mais antiga.</p></div>
+            <button type="button" onclick="loadHistory()" class="px-4 py-2 bg-blue-600 text-white rounded-lg" ${h.loading ? 'disabled' : ''}>Atualizar</button>
+        </div>
+        <form onsubmit="filterHistory(event)" class="history-filters bg-white border border-slate-200 rounded-xl p-4">
+            <label class="text-sm font-semibold text-slate-700">Movimentação
+                <select id="history-action" class="block w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg">
+                    <option value="">Todas</option>
+                    ${Object.entries(historyLabels).map(([value, label]) => `<option value="${value}" ${h.action === value ? 'selected' : ''}>${label}</option>`).join('')}
+                </select>
+            </label>
+            <label class="text-sm font-semibold text-slate-700">Número da onda
+                <input id="history-wave" type="text" value="${escapeAttribute(h.wave)}" maxlength="64" placeholder="Número exato da onda" class="block w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg uppercase">
+            </label>
+            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg">Filtrar</button>
+            <button type="button" onclick="clearHistoryFilters()" class="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg">Limpar</button>
+        </form>
+        <div aria-live="polite">
+            ${h.loading ? '<p class="text-sm text-slate-500 p-4">Carregando histórico…</p>' : h.error ? `<p role="alert" class="text-sm text-red-600 p-4">${escapeAttribute(h.error)}</p>` : h.rows.length === 0 ? '<p class="text-sm text-slate-500 bg-white border border-slate-200 rounded-xl p-6">Nenhuma movimentação encontrada para estes filtros.</p>' : `<div class="space-y-3">${h.rows.map(row => {
+                const before = row.before_entries || [];
+                const after = row.after_entries || [];
+                const source = [...new Set(before.map(e => e.address))].join(', ');
+                const destination = [...new Set(after.map(e => e.address))].join(', ');
+                return `<article class="bg-white border border-slate-200 rounded-xl p-4">
+                    <div class="history-entry-heading"><strong class="text-slate-800">${historyLabels[row.action] || escapeAttribute(row.action)} · Onda${row.wave_ids.length > 1 ? 's' : ''} ${row.wave_ids.map(escapeAttribute).join(', ')}</strong><time class="text-xs text-slate-500" datetime="${escapeAttribute(row.created_at)}">${new Date(row.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</time></div>
+                    <p class="text-sm text-slate-600 mt-2">${source ? `Origem: <strong>${escapeAttribute(source)}</strong>` : ''}${source && destination ? ' → ' : ''}${destination ? `Destino: <strong>${escapeAttribute(destination)}</strong>` : ''}</p>
+                    <p class="text-xs text-slate-500 mt-1">Registrado por: ${escapeAttribute(row.actor_name)}</p>
+                    <details class="text-sm text-slate-600 mt-3"><summary class="cursor-pointer font-semibold">Ver alterações</summary>
+                        <div class="history-changes mt-2">
+                            <div><strong>Antes</strong>${before.length ? `<ul class="space-y-1 mt-1">${historyWaveDetails(before)}</ul>` : '<p>Onda ainda não cadastrada nesta vaga.</p>'}</div>
+                            <div><strong>Depois</strong>${after.length ? `<ul class="space-y-1 mt-1">${historyWaveDetails(after)}</ul>` : '<p>Onda retirada da vaga.</p>'}</div>
+                        </div>
+                    </details>
+                </article>`;
+            }).join('')}</div>`}
+        </div>
+        <div class="flex items-center justify-end gap-3">
+            <button type="button" onclick="changeHistoryPage(-1)" class="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg" ${h.loading || h.page === 0 ? 'disabled' : ''}>Anterior</button>
+            <span class="text-sm text-slate-500">Página ${h.page + 1}</span>
+            <button type="button" onclick="changeHistoryPage(1)" class="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg" ${h.loading || !h.hasMore ? 'disabled' : ''}>Próxima</button>
+        </div>
+    </section>`;
+}
+
+function filterHistory(event) {
+    event.preventDefault();
+    historyState.action = document.getElementById('history-action').value;
+    historyState.wave = document.getElementById('history-wave').value.trim().toUpperCase();
+    historyState.page = 0;
+    loadHistory();
+}
+
+function clearHistoryFilters() {
+    historyState.action = '';
+    historyState.wave = '';
+    historyState.page = 0;
+    loadHistory();
+}
+
+function changeHistoryPage(direction) {
+    if (historyState.loading || (direction < 0 && historyState.page === 0) || (direction > 0 && !historyState.hasMore)) return;
+    historyState.page += direction;
+    loadHistory();
+}
+
+async function loadHistory() {
+    if (!storageReady) return;
+    const request = ++historyRequest;
+    historyState.loading = true;
+    historyState.error = '';
+    historyState.hasMore = false;
+    if (state.activeTab === 'history') renderApp();
+    try {
+        let query = BufferSupabase.getClient().from('buffer_history')
+            .select('id,action,wave_ids,before_entries,after_entries,actor_name,created_at')
+            .order('created_at', { ascending: false }).order('id', { ascending: false });
+        if (historyState.action) query = query.eq('action', historyState.action);
+        if (historyState.wave) query = query.contains('wave_ids', [historyState.wave]);
+        const start = historyState.page * historyPageSize;
+        const { data, error } = await query.range(start, start + historyPageSize);
+        if (request !== historyRequest || !storageReady) return;
+        if (error) throw error;
+        historyState.rows = (data || []).slice(0, historyPageSize);
+        historyState.hasMore = (data || []).length > historyPageSize;
+    } catch (error) {
+        if (request !== historyRequest || !storageReady) return;
+        historyState.rows = [];
+        historyState.error = ['PGRST205', '42P01'].includes(error.code)
+            ? 'O histórico precisa ser ativado no banco. Execute supabase-history.sql no SQL Editor.'
+            : 'Não foi possível carregar o histórico. Confira a conexão e clique em Atualizar.';
+    } finally {
+        if (request === historyRequest) {
+            historyState.loading = false;
+            if (storageReady && state.activeTab === 'history') renderApp();
+        }
     }
 }
 
@@ -209,7 +327,7 @@ function renderBufferMap() {
                                 <div></div>
                                 ${columns.map(c => `
                                     <div class="text-center font-bold text-slate-400 text-xs">${c}</div>
-                                    ${c === 'G' ? '<div class="text-center font-bold text-amber-600 text-[9px] uppercase tracking-tighter" title="Corredor entre as colunas G e H">Corredor</div>' : ''}
+                                    ${c === 'G' ? '<div aria-hidden="true"></div>' : ''}
                                 `).join('')}
                             </div>
                             <div class="buffer-map-grid">
@@ -238,19 +356,24 @@ function renderBufferMap() {
                                                         ${pallet.waves.map(w => {
                                                             let priorityClass = 'bg-white border-blue-100 text-slate-600';
                                                             if (w.priority === 'Urgente') priorityClass = 'bg-red-100 border-red-500 text-red-900 font-bold shadow-sm shadow-red-200';
-                                                            return `<span class="wave-tag text-[9px] px-1 py-[2px] rounded truncate leading-none font-medium border ${priorityClass}" data-wave="${w.id}">${w.id}</span>`;
+                                                            const origins = [w.origin.picking ? 'Picking' : '', w.origin.pulmao ? 'Pulmão' : ''].filter(Boolean).join(' e ');
+                                                            const preview = [
+                                                                `Onda ${w.id} • Vaga ${addr}`,
+                                                                `Prioridade: ${w.priority}`,
+                                                                `Origem: ${origins}`,
+                                                                `Quantidade de peças: ${w.quantity != null ? w.quantity.toLocaleString('pt-BR') : 'Não informada'}`,
+                                                                `Alocado às: ${w.time}`
+                                                            ].join('\n');
+                                                            return `<span class="wave-tag text-[9px] px-1 py-[2px] rounded truncate leading-none font-medium border ${priorityClass}" data-wave="${w.id}" title="${escapeAttribute(preview)}">${w.id}</span>`;
                                                         }).join('')}
                                                     </div>
                                                 ` : ''}
                                             </div>
-                                            ${c === 'G' ? `<div class="h-[88px] rounded-md bg-amber-50/80 border-x-2 border-dashed border-amber-300 flex items-center justify-center" title="Corredor entre G e H"><i class="ph ph-arrows-left-right text-amber-400 text-sm"></i></div>` : ''}
+                                            ${c === 'G' ? `<div class="buffer-aisle buffer-aisle-vertical" role="separator" aria-orientation="vertical" aria-label="Corredor entre G e H" title="Corredor entre G e H"></div>` : ''}
                                         `;
                                     }).join('')}
                                     ${r === 2 || r === 4 ? `
-                                        <div class="col-span-full h-8 rounded-md bg-amber-50/80 border-y-2 border-dashed border-amber-300 flex items-center justify-center gap-2 text-amber-600" title="Corredor entre as linhas ${r} e ${r + 1}">
-                                            <i class="ph ph-arrows-down-up text-sm"></i>
-                                            <span class="text-[9px] font-bold uppercase tracking-wider">Corredor</span>
-                                        </div>
+                                        <div class="buffer-aisle buffer-aisle-horizontal" role="separator" aria-orientation="horizontal" aria-label="Corredor entre as linhas ${r} e ${r + 1}" title="Corredor entre as linhas ${r} e ${r + 1}"></div>
                                     ` : ''}
                                 `).join('')}
                             </div>
@@ -324,8 +447,10 @@ function renderBufferMap() {
                                                             <i class="ph ph-clock mr-2 text-slate-400"></i> <span>Alocado às: <span class="font-medium text-slate-700">${w.time}</span></span>
                                                         </div>
                                                     </div>
+                                                    ${w.quantity != null ? `<p class="text-xs text-slate-600 mt-2">Quantidade de peças: <strong>${w.quantity.toLocaleString('pt-BR')}</strong></p>` : ''}
                                                     ${continuationHtml}
                                                     <div class="pallet-wave-actions mt-3 pt-2 border-t border-slate-100 flex justify-end flex-wrap gap-2">
+                                                        ${otherPallets.length > 0 ? `<button onclick="openGroupWaveModal('${w.id}', '${selectedPallet.address}')" class="text-[11px] px-2 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded flex items-center font-medium transition"><i class="ph ph-link mr-1"></i> Agrupar</button>` : ''}
                                                         <button onclick="openEditWaveModal('${w.id}', '${selectedPallet.address}')" class="text-[11px] px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded flex items-center font-medium transition"><i class="ph ph-pencil-simple mr-1"></i> Editar</button>
                                                         <button onclick="openReallocateModal('${w.id}', '${selectedPallet.address}')" class="text-[11px] px-2 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded flex items-center font-medium transition"><i class="ph ph-arrows-left-right mr-1"></i> Realocar</button>
                                                         <button onclick="openWithdrawWaveModal('${w.id}', '${selectedPallet.address}')" class="text-[11px] px-2 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded flex items-center font-medium transition"><i class="ph ph-sign-out mr-1"></i> Retirar onda</button>
@@ -425,10 +550,6 @@ function renderModals() {
                                         <div><span class="font-bold">Atenção:</span> Esta onda já possui partes no buffer. Será uma <b>continuação</b>.</div>
                                     </div>
                                 </div>
-                                <div>
-                                    <label class="block text-sm font-semibold text-slate-700 mb-1">Endereço (Vaga no Buffer)</label>
-                                    <input type="text" id="form-wave-slot" placeholder="BiPe ou digite a vaga (ex: A1, L5)" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase font-bold" required>
-                                </div>
                                 <div class="grid grid-cols-2 gap-4">
                                     <div>
                                         <label class="block text-sm font-semibold text-slate-700 mb-2">Prioridade</label>
@@ -450,6 +571,14 @@ function renderModals() {
                                             </label>
                                         </div>
                                     </div>
+                                </div>
+                                <div>
+                                    <label for="form-wave-quantity" class="block text-sm font-semibold text-slate-700 mb-1">Quantidade de peças (opcional)</label>
+                                    <input type="number" id="form-wave-quantity" min="0" max="2147483647" step="1" placeholder="Ex: 150" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-slate-700 mb-1">Endereço (Vaga no Buffer)</label>
+                                    <input type="text" id="form-wave-slot" placeholder="BiPe ou digite a vaga (ex: A1, L5)" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase font-bold" required>
                                 </div>
                                 <div class="pt-4 flex justify-end space-x-3">
                                     <button type="button" onclick="closeModal('addWave')" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
@@ -513,6 +642,9 @@ function renderModals() {
     // Edit Wave Modal
     if (state.ui.modals.editWave.open) {
         const err = state.ui.modals.editWave.error;
+        const editModal = state.ui.modals.editWave;
+        const wave = state.appData.bufferPallets.find(p => p.address === editModal.currentSlot)?.waves.find(w => w.id === editModal.oldWaveId);
+        const values = editModal.values || { id: editModal.oldWaveId, urgent: wave?.priority === 'Urgente', picking: !!wave?.origin.picking, pulmao: !!wave?.origin.pulmao, quantity: wave?.quantity ?? '' };
         html += `
             <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 fade-in">
                 <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col">
@@ -522,10 +654,34 @@ function renderModals() {
                     </div>
                     <div class="p-6">
                         ${err ? `<div class="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg flex items-start"><i class="ph ph-warning mr-2 mt-0.5"></i><span>${err}</span></div>` : ''}
-                        <p class="text-sm text-slate-500 mb-4">Atenção: Renomear a onda atualizará todas as vagas caso ela seja uma continuação.</p>
+                        <p class="text-sm text-slate-500 mb-4">Renomear a onda atualizará todas as vagas. A prioridade e a origem serão alteradas apenas nesta vaga.</p>
                         <form onsubmit="handleEditWaveSubmit(event)">
                             <label class="block text-sm font-semibold text-slate-700 mb-1">Novo número da onda</label>
-                            <input type="text" id="form-edit-wave-id" value="${state.ui.modals.editWave.oldWaveId}" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase" required>
+                            <input type="text" id="form-edit-wave-id" value="${escapeAttribute(values.id)}" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase" required>
+                            <div class="mt-4">
+                                <span class="block text-sm font-semibold text-slate-700 mb-2">Prioridade</span>
+                                <label class="flex items-center space-x-2 cursor-pointer bg-red-50 border border-red-100 p-2 rounded-lg">
+                                    <input type="checkbox" id="form-edit-wave-urgent" class="w-4 h-4 text-red-600 rounded" ${values.urgent ? 'checked' : ''}>
+                                    <span class="text-sm font-bold text-red-700">Prioridade</span>
+                                </label>
+                            </div>
+                            <div class="mt-4">
+                                <label for="form-edit-wave-quantity" class="block text-sm font-semibold text-slate-700 mb-1">Quantidade de peças (opcional)</label>
+                                <input type="number" id="form-edit-wave-quantity" value="${escapeAttribute(values.quantity ?? '')}" min="0" max="2147483647" step="1" placeholder="Ex: 150" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <fieldset class="mt-4">
+                                <legend class="text-sm font-semibold text-slate-700 mb-2">Origem dos itens</legend>
+                                <div class="flex gap-4">
+                                    <label class="flex items-center space-x-2 cursor-pointer">
+                                        <input type="checkbox" id="form-edit-wave-picking" class="w-4 h-4 text-blue-600 rounded" ${values.picking ? 'checked' : ''}>
+                                        <span class="text-sm text-slate-600">Picking</span>
+                                    </label>
+                                    <label class="flex items-center space-x-2 cursor-pointer">
+                                        <input type="checkbox" id="form-edit-wave-pulmao" class="w-4 h-4 text-blue-600 rounded" ${values.pulmao ? 'checked' : ''}>
+                                        <span class="text-sm text-slate-600">Pulmão</span>
+                                    </label>
+                                </div>
+                            </fieldset>
                             
                             <div class="pt-6 flex justify-end space-x-3">
                                 <button type="button" onclick="closeModal('editWave')" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
@@ -581,7 +737,7 @@ function renderModals() {
                     </div>
                     <div class="p-6">
                         <p class="text-sm text-slate-600 mb-4">Deseja retirar para a bancada a onda <strong class="text-slate-800">${state.ui.modals.withdrawWave.waveId}</strong> da vaga <strong class="text-slate-800">${state.ui.modals.withdrawWave.currentSlot}</strong>?</p>
-                        <p class="text-xs text-red-600 mb-6 bg-red-50 p-3 rounded-lg border border-red-100">A onda será retirada para a bancada e ficará registrada no banco por 2 horas.</p>
+                        <p class="text-xs text-red-600 mb-6 bg-red-50 p-3 rounded-lg border border-red-100">A onda será retirada para a bancada e ficará registrada no banco por 48 horas após a retirada.</p>
                         <div class="flex justify-end space-x-3">
                             <button type="button" onclick="closeModal('withdrawWave')" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
                             <button onclick="handleWithdrawWaveSubmit()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg shadow-sm">Confirmar Retirada</button>
@@ -592,6 +748,29 @@ function renderModals() {
         `;
     }
 
+    if (state.ui.modals.groupWave.open) {
+        const modal = state.ui.modals.groupWave;
+        const parts = state.appData.bufferPallets.filter(p => p.waves.some(w => w.id === modal.waveId));
+        html += `
+            <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 fade-in">
+                <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+                    <h3 class="font-bold text-slate-800 text-lg mb-4">Agrupar onda ${modal.waveId}</h3>
+                    <p class="text-sm text-slate-600 mb-4">Reúna as partes desta onda em uma única vaga. As origens Picking e Pulmão e a prioridade serão mantidas. Apenas esta onda será removida das outras vagas.</p>
+                    <p class="text-sm text-slate-600 mb-4">Vagas atuais: <strong>${parts.map(p => p.address).join(', ')}</strong></p>
+                    ${modal.error ? `<p role="alert" class="text-sm text-red-600 mb-4">${escapeAttribute(modal.error)}</p>` : ''}
+                    <form onsubmit="handleGroupWaveSubmit(event)" class="space-y-4">
+                        <label for="form-group-wave-slot" class="block text-sm font-semibold text-slate-700">Vaga onde a onda ficará</label>
+                        <select id="form-group-wave-slot" class="w-full px-4 py-2 border border-slate-300 rounded-lg" required>
+                            ${parts.map(p => `<option value="${p.address}" ${p.address === modal.currentSlot ? 'selected' : ''}>${p.address}</option>`).join('')}
+                        </select>
+                        <div class="flex justify-end gap-2 pt-4">
+                            <button type="button" onclick="closeModal('groupWave')" class="px-4 py-2 text-sm text-slate-600 rounded-lg">Cancelar</button>
+                            <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg">Confirmar agrupamento</button>
+                        </div>
+                    </form>
+                </div>
+            </div>`;
+    }
     modalsDiv.innerHTML = html;
     syncPalletDialog();
     const lookupDialog = document.getElementById('pallet-lookup-dialog');
@@ -698,6 +877,12 @@ function handleAddWaveSubmit(e) {
     const priority = isUrgent ? 'Urgente' : 'Normal';
     const hasPicking = document.getElementById('form-wave-picking').checked;
     const hasPulmao = document.getElementById('form-wave-pulmao').checked;
+    const quantity = parseWaveQuantity(document.getElementById('form-wave-quantity').value);
+    if (Number.isNaN(quantity)) {
+        state.ui.modals.addWave.error = 'Informe uma quantidade inteira entre 0 e 2.147.483.647 ou deixe em branco.';
+        renderModals();
+        return;
+    }
 
     if (!isValidWaveId(waveId)) {
         state.ui.modals.addWave.error = 'Use até 64 caracteres: letras, números, ponto, barra, hífen ou sublinhado.';
@@ -735,7 +920,7 @@ function handleAddWaveSubmit(e) {
     }
 
     const newWave = { 
-        id: waveId, priority, origin: { picking: hasPicking, pulmao: hasPulmao },
+        id: waveId, priority, origin: { picking: hasPicking, pulmao: hasPulmao }, quantity,
         time: new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })
     };
 
@@ -780,8 +965,16 @@ function handleEditWaveSubmit(e) {
     const oldId = state.ui.modals.editWave.oldWaveId;
     const newId = document.getElementById('form-edit-wave-id').value.trim().toUpperCase();
 
-    if (newId === oldId) {
-        closeModal('editWave');
+    const modal = state.ui.modals.editWave;
+    const urgent = document.getElementById('form-edit-wave-urgent').checked;
+    const picking = document.getElementById('form-edit-wave-picking').checked;
+    const pulmao = document.getElementById('form-edit-wave-pulmao').checked;
+    const quantityText = document.getElementById('form-edit-wave-quantity').value;
+    const quantity = parseWaveQuantity(quantityText);
+    modal.values = { id: newId, urgent, picking, pulmao, quantity: quantityText };
+    if (Number.isNaN(quantity)) {
+        modal.error = 'Informe uma quantidade inteira entre 0 e 2.147.483.647 ou deixe em branco.';
+        renderModals();
         return;
     }
 
@@ -790,16 +983,33 @@ function handleEditWaveSubmit(e) {
         renderModals();
         return;
     }
-    if (state.appData.bufferPallets.some(p => p.waves.some(w => w.id === newId))) {
+    if (newId !== oldId && state.appData.bufferPallets.some(p => p.waves.some(w => w.id === newId))) {
         state.ui.modals.editWave.error = 'Já existe uma onda com esse número no buffer.';
         renderModals();
         return;
     }
 
-    // Renomeia todas as partes da onda no buffer.
+    if (!picking && !pulmao) {
+        modal.error = 'Selecione pelo menos uma origem (Picking ou Pulmão).';
+        renderModals();
+        return;
+    }
+    if (!state.appData.bufferPallets.some(p => p.address === modal.currentSlot && p.waves.some(w => w.id === oldId))) {
+        modal.error = 'Esta onda não está mais na vaga selecionada. Confira os dados e tente novamente.';
+        renderModals();
+        return;
+    }
+    // Mantém o número em todas as partes e altera os atributos da parte selecionada.
     state.appData.bufferPallets.forEach(p => {
         p.waves.forEach(w => {
-            if (w.id === oldId) w.id = newId;
+            if (w.id === oldId) {
+                w.id = newId;
+                if (p.address === modal.currentSlot) {
+                    w.priority = urgent ? 'Urgente' : 'Normal';
+                    w.origin = { picking, pulmao };
+                    w.quantity = quantity;
+                }
+            }
         });
     });
 
@@ -891,6 +1101,8 @@ let refreshTimer = null;
 
 function renderLogin(message = '') {
     storageReady = false;
+    historyRequest++;
+    historyState = { rows: [], action: '', wave: '', page: 0, loading: false, error: '', hasMore: false };
     document.getElementById('modals').innerHTML = '';
     document.getElementById('app').innerHTML = `
         <main class="login-page">
@@ -906,6 +1118,63 @@ function renderLogin(message = '') {
                 <button id="login-submit" type="submit">Entrar</button>
             </form>
         </main>`;
+}
+
+function parseWaveQuantity(value) {
+    const text = value.trim();
+    if (!text) return null;
+    const quantity = Number(text);
+    return /^\d+$/.test(text) && Number.isInteger(quantity) && quantity <= 2147483647 ? quantity : NaN;
+}
+
+function openGroupWaveModal(waveId, currentSlot) {
+    state.ui.modals.groupWave = { open: true, waveId, currentSlot, error: '' };
+    renderModals();
+}
+
+function handleGroupWaveSubmit(e) {
+    e.preventDefault();
+    const modal = state.ui.modals.groupWave;
+    const slot = document.getElementById('form-group-wave-slot').value;
+    const pallets = state.appData.bufferPallets;
+    const parts = pallets.filter(p => p.waves.some(w => w.id === modal.waveId));
+    const destination = parts.find(p => p.address === slot);
+    if (parts.length < 2 || !destination) {
+        modal.error = 'A onda precisa estar em pelo menos duas vagas. Confira as vagas atuais e tente novamente.';
+        renderModals();
+        return;
+    }
+    const waves = parts.map(p => p.waves.find(w => w.id === modal.waveId));
+    if (waves.some(w => w.quantity != null) && waves.some(w => w.quantity == null)) {
+        modal.error = 'Preencha a quantidade de peças nas partes restantes antes de agrupar, para calcular o total.';
+        renderModals();
+        return;
+    }
+    // Só informa um total quando a quantidade de todas as partes é conhecida.
+    const quantity = waves.every(w => w.quantity != null) ? waves.reduce((total, w) => total + w.quantity, 0) : null;
+    if (quantity > 2147483647) {
+        modal.error = 'A soma das quantidades excede o limite de 2.147.483.647 peças.';
+        renderModals();
+        return;
+    }
+    const merged = {
+        ...destination.waves.find(w => w.id === modal.waveId),
+        quantity,
+        priority: waves.some(w => w.priority === 'Urgente') ? 'Urgente' : 'Normal',
+        origin: {
+            picking: waves.some(w => w.origin.picking),
+            pulmao: waves.some(w => w.origin.pulmao)
+        }
+    };
+    // Substitui a parte no destino sem ocupar uma vaga adicional no palete.
+    for (const pallet of parts) {
+        pallet.waves = pallet.address === slot
+            ? pallet.waves.map(w => w.id === modal.waveId ? merged : w)
+            : pallet.waves.filter(w => w.id !== modal.waveId);
+    }
+    modal.open = false;
+    state.ui.selectedAddress = slot;
+    renderApp();
 }
 
 async function loadCloudBuffer() {
@@ -925,6 +1194,7 @@ async function loadCloudBuffer() {
 }
 
 async function enterBuffer(user) {
+    state.activeTab = 'buffer';
     bufferUser = user;
     await loadCloudBuffer();
     storageReady = true;
@@ -1002,7 +1272,7 @@ async function logoutBuffer() {
     if (error) document.getElementById('login-error').textContent = 'Não foi possível encerrar a sessão. Verifique a conexão e tente entrar e sair novamente.';
 }
 
-function persistOperation(original, isWithdrawal = false) {
+function persistOperation(original, isWithdrawal = false, action = '') {
     return async function (...args) {
         args[0]?.preventDefault?.();
         if (storageBusy) return;
@@ -1022,10 +1292,11 @@ function persistOperation(original, isWithdrawal = false) {
         document.getElementById('modals').inert = true;
         document.getElementById('sync-status').textContent = 'Salvando…';
         try {
-            const { data, error } = await BufferSupabase.getClient().rpc('buffer_commit', {
+            const { data, error } = await BufferSupabase.getClient().rpc('buffer_commit_history', {
                 p_pallets: BufferStorage.validate(state.appData.bufferPallets),
                 p_revision: bufferRevision,
-                p_withdraw_address: withdrawalAddress
+                p_withdraw_address: withdrawalAddress,
+                p_action: action
             });
             if (error) throw error;
             bufferRevision = data;
@@ -1034,7 +1305,9 @@ function persistOperation(original, isWithdrawal = false) {
             state.ui = JSON.parse(uiBefore);
             // Releitura resolve conflitos e respostas perdidas após uma gravação bem-sucedida.
             try { await loadCloudBuffer(); } catch (_) {}
-            alert(error.message?.includes('BUFFER_CONFLICT')
+            alert(error.code === 'PGRST202'
+                ? 'Execute supabase-history.sql no SQL Editor para ativar o histórico e salvar as movimentações.'
+                : error.message?.includes('BUFFER_CONFLICT')
                 ? 'Outra pessoa alterou o buffer. Os dados foram atualizados; confira a vaga e tente novamente.'
                 : 'Não foi possível confirmar a gravação. Confira os dados e a conexão antes de tentar novamente.');
         } finally {
@@ -1046,11 +1319,12 @@ function persistOperation(original, isWithdrawal = false) {
     };
 }
 
-handleAddWaveSubmit = persistOperation(handleAddWaveSubmit);
-handleWithdrawSubmit = persistOperation(handleWithdrawSubmit, true);
-handleEditWaveSubmit = persistOperation(handleEditWaveSubmit);
-handleReallocateSubmit = persistOperation(handleReallocateSubmit);
-handleWithdrawWaveSubmit = persistOperation(handleWithdrawWaveSubmit, 'wave');
+handleAddWaveSubmit = persistOperation(handleAddWaveSubmit, false, 'entrada');
+handleWithdrawSubmit = persistOperation(handleWithdrawSubmit, true, 'retirada');
+handleEditWaveSubmit = persistOperation(handleEditWaveSubmit, false, 'edicao');
+handleReallocateSubmit = persistOperation(handleReallocateSubmit, false, 'realocacao');
+handleGroupWaveSubmit = persistOperation(handleGroupWaveSubmit, false, 'agrupamento');
+handleWithdrawWaveSubmit = persistOperation(handleWithdrawWaveSubmit, 'wave', 'retirada');
 
 async function initializeApp() {
     renderLogin();
