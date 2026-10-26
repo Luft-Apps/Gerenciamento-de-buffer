@@ -110,7 +110,8 @@ body { margin:0; }
 #clock-display { font-size:12px; color:#64748b; white-space:nowrap; }
 #view-container { flex:1; overflow:auto; padding:20px 28px 32px; min-height:0; }
 .view-inner { max-width:1600px; width:100%; margin:auto; }
-.overview-kpis { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; }
+.overview-kpis { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
+@media(min-width:1200px) { .overview-kpis { grid-template-columns:repeat(4,minmax(0,1fr)); } }
 .overview-kpis > div { min-width:0; }
 .buffer-layout { display:grid; grid-template-columns:minmax(0,1fr); align-items:start; gap:20px; }
 .buffer-grid-card { width:100%; min-width:0; padding:16px; }
