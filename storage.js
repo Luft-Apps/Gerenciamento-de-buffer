@@ -29,7 +29,8 @@ const BufferStorage = (() => {
             waves: p.waves.map(w => ({
                 id: w.id, priority: w.priority,
                 origin: { picking: w.origin.picking, pulmao: w.origin.pulmao }, time: w.time,
-                quantity: w.quantity ?? null
+                quantity: w.quantity ?? null,
+                separator: typeof w.separator === 'string' ? w.separator.trim().slice(0, 120) : ''
             }))
         }));
     }
