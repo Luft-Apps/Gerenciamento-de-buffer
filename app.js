@@ -118,7 +118,7 @@ function historyWaveDetails(entries) {
     return entries.map(entry => {
         const wave = entry.wave;
         const origins = [wave.origin?.picking ? 'Picking' : '', wave.origin?.pulmao ? 'Pulmão' : ''].filter(Boolean).join(' + ');
-        return `<li><strong>${escapeAttribute(wave.id)}</strong> · ${escapeAttribute(entry.address)} · ${escapeAttribute(wave.priority)} · ${escapeAttribute(origins)} · ${wave.quantity == null ? 'Peças não informadas' : `${Number(wave.quantity).toLocaleString('pt-BR')} peças`}</li>`;
+        return `<li><strong>${escapeAttribute(wave.id)}</strong> · ${escapeAttribute(entry.address)} · ${escapeAttribute(wave.priority)} · ${escapeAttribute(origins)} · ${wave.quantity == null ? 'Peças não informadas' : `${Number(wave.quantity).toLocaleString('pt-BR')} peças`} · Separador: ${escapeAttribute(wave.separator || 'Não informado')}</li>`;
     }).join('');
 }
 
@@ -232,6 +232,12 @@ function renderOverview() {
     const uniqueWaves = new Set();
     occupiedPallets.forEach(p => p.waves.forEach(w => uniqueWaves.add(w.id)));
     const totalUniqueWaves = uniqueWaves.size;
+    let totalPieces = 0;
+    let quantitiesMissing = 0;
+    occupiedPallets.forEach(p => p.waves.forEach(w => {
+        if (w.quantity == null) quantitiesMissing++;
+        else totalPieces += w.quantity;
+    }));
 
     return `
         <div class="space-y-6 fade-in">
@@ -277,6 +283,16 @@ function renderOverview() {
                         </div>
                     </div>
                     <p class="text-xs text-slate-500 font-medium bg-slate-50 py-1.5 px-3 rounded-lg inline-block mt-4">Pedidos únicos aguardando</p>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 border border-slate-200 flex flex-col justify-between group">
+                    <div class="flex items-center space-x-4 mb-2">
+                        <div class="p-3 bg-teal-50 text-teal-600 rounded-xl group-hover:scale-110 transition-transform"><i class="ph ph-cubes text-2xl"></i></div>
+                        <div>
+                            <p class="text-sm text-slate-500 font-medium">Peças no Buffer</p>
+                            <p class="text-3xl font-black text-slate-800 leading-tight">${totalPieces.toLocaleString('pt-BR')}</p>
+                        </div>
+                    </div>
+                    <p class="text-xs text-slate-500 font-medium bg-slate-50 py-1.5 px-3 rounded-lg inline-block mt-4">${quantitiesMissing ? `Total parcial · ${quantitiesMissing} parte(s) de onda sem quantidade informada` : 'Total de peças nas vagas ocupadas'}</p>
                 </div>
             </div>
 
@@ -360,6 +376,7 @@ function renderBufferMap() {
                                                             const preview = [
                                                                 `Onda ${w.id} • Vaga ${addr}`,
                                                                 `Prioridade: ${w.priority}`,
+                                                                `Separador: ${w.separator || 'Não informado'}`,
                                                                 `Origem: ${origins}`,
                                                                 `Quantidade de peças: ${w.quantity != null ? w.quantity.toLocaleString('pt-BR') : 'Não informada'}`,
                                                                 `Alocado às: ${w.time}`
@@ -448,6 +465,7 @@ function renderBufferMap() {
                                                         </div>
                                                     </div>
                                                     ${w.quantity != null ? `<p class="text-xs text-slate-600 mt-2">Quantidade de peças: <strong>${w.quantity.toLocaleString('pt-BR')}</strong></p>` : ''}
+                                                    <p class="text-xs text-slate-600 mt-2 break-words">Separador: <strong>${escapeAttribute(w.separator || 'Não informado')}</strong></p>
                                                     ${continuationHtml}
                                                     <div class="pallet-wave-actions mt-3 pt-2 border-t border-slate-100 flex justify-end flex-wrap gap-2">
                                                         ${otherPallets.length > 0 ? `<button onclick="openGroupWaveModal('${w.id}', '${selectedPallet.address}')" class="text-[11px] px-2 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded flex items-center font-medium transition"><i class="ph ph-link mr-1"></i> Agrupar</button>` : ''}
@@ -461,6 +479,10 @@ function renderBufferMap() {
                                         }).join('')}
                                     </div>
                                     <div class="pt-4 border-t border-slate-100 mt-4">
+                                        <button onclick="openReallocatePalletModal()" class="w-full mb-3 flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition shadow-sm">
+                                            <i class="ph ph-arrows-left-right text-lg"></i>
+                                            <span>Realocar palete com todas as ondas</span>
+                                        </button>
                                         <button onclick="openWithdrawModal()" class="w-full flex items-center justify-center space-x-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition shadow-sm">
                                             <i class="ph ph-sign-out text-lg"></i>
                                             <span>Retirar do Buffer</span>
@@ -549,6 +571,10 @@ function renderModals() {
                                         <i class="ph ph-info mr-2 mt-0.5 text-lg"></i>
                                         <div><span class="font-bold">Atenção:</span> Esta onda já possui partes no buffer. Será uma <b>continuação</b>.</div>
                                     </div>
+                                </div>
+                                <div>
+                                    <label for="form-wave-separator" class="block text-sm font-semibold text-slate-700 mb-1">Nome do separador (opcional)</label>
+                                    <input type="text" id="form-wave-separator" maxlength="120" placeholder="Nome do separador" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                                 </div>
                                 <div class="grid grid-cols-2 gap-4">
                                     <div>
@@ -659,6 +685,10 @@ function renderModals() {
                             <label class="block text-sm font-semibold text-slate-700 mb-1">Novo número da onda</label>
                             <input type="text" id="form-edit-wave-id" value="${escapeAttribute(values.id)}" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase" required>
                             <div class="mt-4">
+                                <label for="form-edit-wave-separator" class="block text-sm font-semibold text-slate-700 mb-1">Nome do separador (opcional)</label>
+                                <input type="text" id="form-edit-wave-separator" maxlength="120" value="${escapeAttribute(values.separator ?? wave?.separator ?? '')}" placeholder="Nome do separador" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div class="mt-4">
                                 <span class="block text-sm font-semibold text-slate-700 mb-2">Prioridade</span>
                                 <label class="flex items-center space-x-2 cursor-pointer bg-red-50 border border-red-100 p-2 rounded-lg">
                                     <input type="checkbox" id="form-edit-wave-urgent" class="w-4 h-4 text-red-600 rounded" ${values.urgent ? 'checked' : ''}>
@@ -697,21 +727,24 @@ function renderModals() {
     // Reallocate Wave Modal
     if (state.ui.modals.reallocate.open) {
         const err = state.ui.modals.reallocate.error;
+        const movingPallet = state.ui.modals.reallocate.mode === 'pallet';
+        const sourceWaves = state.appData.bufferPallets.find(p => p.address === state.ui.modals.reallocate.currentSlot)?.waves || [];
         html += `
             <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 fade-in">
                 <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col">
                     <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-blue-50">
-                        <h3 class="font-bold text-slate-800 flex items-center"><i class="ph ph-arrows-left-right mr-2 text-blue-600"></i> Realocar Onda</h3>
+                        <h3 class="font-bold text-slate-800 flex items-center"><i class="ph ph-arrows-left-right mr-2 text-blue-600"></i> ${movingPallet ? 'Realocar Palete' : 'Realocar Onda'}</h3>
                         <button onclick="closeModal('reallocate')" class="text-slate-400 hover:text-slate-600"><i class="ph ph-x text-lg"></i></button>
                     </div>
                     <div class="p-6">
                         ${err ? `<div class="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg flex items-start"><i class="ph ph-warning mr-2 mt-0.5"></i><span>${err}</span></div>` : ''}
                         <div class="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-lg">
-                            <span class="text-xs text-slate-500 block mb-1">Movendo onda:</span>
-                            <span class="font-bold text-slate-800">${state.ui.modals.reallocate.waveId}</span>
+                            <span class="text-xs text-slate-500 block mb-1">${movingPallet ? 'Movendo todas as ondas do palete:' : 'Movendo onda:'}</span>
+                            <span class="font-bold text-slate-800 break-words">${movingPallet ? sourceWaves.map(w => escapeAttribute(w.id)).join(', ') : state.ui.modals.reallocate.waveId}</span>
                             <span class="text-xs text-slate-500 block mt-1">Vaga atual: <span class="font-bold text-slate-700">${state.ui.modals.reallocate.currentSlot}</span></span>
                         </div>
                         <form onsubmit="handleReallocateSubmit(event)">
+                            ${movingPallet ? '<p class="text-sm text-slate-500 mb-3">Escolha uma vaga livre. Todas as ondas serão transferidas juntas, mantendo seus dados.</p>' : ''}
                             <label class="block text-sm font-semibold text-slate-700 mb-1">Nova Vaga Destino</label>
                             <input type="text" id="form-reallocate-slot" placeholder="BiPe ou digite (ex: C4)" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase font-bold" required>
                             
@@ -921,6 +954,7 @@ function handleAddWaveSubmit(e) {
 
     const newWave = { 
         id: waveId, priority, origin: { picking: hasPicking, pulmao: hasPulmao }, quantity,
+        separator: document.getElementById('form-wave-separator').value.trim().slice(0, 120),
         time: new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })
     };
 
@@ -955,6 +989,14 @@ function openReallocateModal(waveId, currentSlot) {
     renderModals();
 }
 
+function openReallocatePalletModal() {
+    const currentSlot = state.ui.selectedAddress;
+    const pallet = state.appData.bufferPallets.find(p => p.address === currentSlot);
+    if (!pallet?.waves.length) return;
+    state.ui.modals.reallocate = { open: true, mode: 'pallet', currentSlot, error: '' };
+    renderModals();
+}
+
 function openWithdrawWaveModal(waveId, currentSlot) {
     state.ui.modals.withdrawWave = { open: true, waveId: waveId, currentSlot: currentSlot };
     renderModals();
@@ -971,7 +1013,8 @@ function handleEditWaveSubmit(e) {
     const pulmao = document.getElementById('form-edit-wave-pulmao').checked;
     const quantityText = document.getElementById('form-edit-wave-quantity').value;
     const quantity = parseWaveQuantity(quantityText);
-    modal.values = { id: newId, urgent, picking, pulmao, quantity: quantityText };
+    const separator = document.getElementById('form-edit-wave-separator').value.trim().slice(0, 120);
+    modal.values = { id: newId, urgent, picking, pulmao, quantity: quantityText, separator };
     if (Number.isNaN(quantity)) {
         modal.error = 'Informe uma quantidade inteira entre 0 e 2.147.483.647 ou deixe em branco.';
         renderModals();
@@ -1008,6 +1051,7 @@ function handleEditWaveSubmit(e) {
                     w.priority = urgent ? 'Urgente' : 'Normal';
                     w.origin = { picking, pulmao };
                     w.quantity = quantity;
+                    w.separator = separator;
                 }
             }
         });
@@ -1037,6 +1081,27 @@ function handleReallocateSubmit(e) {
 
     const destPalletIdx = state.appData.bufferPallets.findIndex(p => p.address === newSlot);
     if (destPalletIdx === -1) return;
+
+    if (state.ui.modals.reallocate.mode === 'pallet') {
+        const source = state.appData.bufferPallets.find(p => p.address === oldSlot);
+        const destination = state.appData.bufferPallets[destPalletIdx];
+        if (!source?.waves.length) {
+            state.ui.modals.reallocate.error = 'O palete não está mais na vaga de origem. Confira os dados e tente novamente.';
+            renderModals();
+            return;
+        }
+        if (destination.waves.length) {
+            state.ui.modals.reallocate.error = 'Escolha uma vaga livre para realocar o palete inteiro.';
+            renderModals();
+            return;
+        }
+        destination.waves = source.waves;
+        source.waves = [];
+        state.ui.selectedAddress = newSlot;
+        closeModal('reallocate');
+        renderApp();
+        return;
+    }
 
     if (state.appData.bufferPallets[destPalletIdx].waves.some(w => w.id === waveId)) {
         state.ui.modals.reallocate.error = 'Esta onda já está na vaga destino. Escolha outra vaga.';
